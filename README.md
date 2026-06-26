@@ -201,5 +201,3 @@ Open [http://localhost:3000/dashboard](http://localhost:3000/dashboard) for anal
 | Click Rate | (Clicked / Sent) × 100 |
 
 ---
-
-Built with ❤️ for the AI Lead Management Hackathon2 / 2
