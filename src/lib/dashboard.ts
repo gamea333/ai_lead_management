@@ -1,4 +1,5 @@
 import { createAdminClient } from "./supabase";
+import { formatDateTime } from "./format";
 import type { DashboardStats, LeadWithEngagement } from "./types";
 
 export async function getDashboardData(): Promise<{
@@ -54,6 +55,7 @@ export async function getDashboardData(): Promise<{
       ...lead,
       email_opened: leadEvents.has("opened"),
       link_clicked: leadEvents.has("clicked"),
+      created_at_display: formatDateTime(lead.created_at),
     };
   });
 

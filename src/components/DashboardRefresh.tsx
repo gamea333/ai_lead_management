@@ -2,32 +2,42 @@
 
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+import { formatTime } from "@/lib/format";
 
 const AUTO_REFRESH_MS = 30_000;
 
 export default function DashboardRefresh() {
   const router = useRouter();
   const [refreshing, setRefreshing] = useState(false);
-  const [lastUpdated, setLastUpdated] = useState(() => new Date());
+  const [lastUpdatedLabel, setLastUpdatedLabel] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
     setRefreshing(true);
-    router.refresh();
-    setLastUpdated(new Date());
+    try {
+      router.refresh();
+      setLastUpdatedLabel(formatTime(new Date()));
+    } catch {
+      // Router may not be ready yet during initial hydration
+    }
     setTimeout(() => setRefreshing(false), 600);
   }, [router]);
 
   useEffect(() => {
+    setLastUpdatedLabel(formatTime(new Date()));
+
     const interval = setInterval(refresh, AUTO_REFRESH_MS);
     return () => clearInterval(interval);
   }, [refresh]);
 
   return (
     <div className="flex items-center gap-3">
-      <span className="hidden text-xs text-zinc-600 sm:inline">
-        Updated {lastUpdated.toLocaleTimeString()}
-      </span>
+      {lastUpdatedLabel && (
+        <span className="hidden text-xs text-zinc-600 sm:inline">
+          Updated {lastUpdatedLabel}
+        </span>
+      )}
       <button
+        type="button"
         onClick={refresh}
         disabled={refreshing}
         className="btn-interactive inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-zinc-300 transition-colors hover:border-violet-500/30 hover:bg-white/10 hover:text-white disabled:opacity-60"

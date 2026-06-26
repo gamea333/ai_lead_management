@@ -1,157 +1,133 @@
-import { Resend } from "resend";
+import emailjs from "@emailjs/nodejs";
 
 export type SendLeadEmailResult = {
-  id: string;
+  status: number;
+  text: string;
 };
-
-function getResend() {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new Error("Missing RESEND_API_KEY");
-  return new Resend(apiKey);
-}
-
-function getFromAddress() {
-  return process.env.RESEND_FROM_EMAIL || "LeadFlow <onboarding@resend.dev>";
-}
-
-/** Resend's test domain only delivers to the account owner's email. */
-export function isSandboxSender(from = getFromAddress()) {
-  return /@resend\.dev/i.test(from);
-}
-
-export function getSandboxSenderWarning() {
-  if (!isSandboxSender()) return null;
-  return (
-    "RESEND_FROM_EMAIL uses onboarding@resend.dev (test mode). " +
-    "Resend only delivers to the email on your Resend account. " +
-    "To email all leads, verify a domain at resend.com/domains and set " +
-    "RESEND_FROM_EMAIL to e.g. LeadFlow <noreply@yourdomain.com>."
-  );
-}
-
-export function formatResendErrorMessage(message: string) {
-  if (
-    message.includes("only send testing emails") ||
-    message.includes("verify a domain")
-  ) {
-    return (
-      "Confirmation email could not be sent to this address. " +
-      "Your Resend account is in test mode (onboarding@resend.dev) and can only " +
-      "email the address registered on your Resend account. Verify a custom domain " +
-      "at resend.com/domains and update RESEND_FROM_EMAIL in your .env file."
-    );
-  }
-  return `Confirmation email could not be sent: ${message}`;
-}
 
 function getBaseUrl() {
   return process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 }
 
-export function buildTrackingUrls(leadId: string) {
-  const baseUrl = getBaseUrl();
-  const redirect = encodeURIComponent("https://example.com");
-
-  return {
-    openPixelUrl: `${baseUrl}/api/track/open?lead_id=${leadId}`,
-    clickUrl: `${baseUrl}/api/track/click?lead_id=${leadId}&redirect=${redirect}`,
-  };
+function getCtaRedirectUrl() {
+  return process.env.NEXT_PUBLIC_CTA_REDIRECT_URL || "https://example.com";
 }
 
-export function buildLeadEmailHtml(params: {
+function getEmailJsConfig() {
+  const serviceId = process.env.EMAILJS_SERVICE_ID;
+  const templateId = process.env.EMAILJS_TEMPLATE_ID;
+  const publicKey = process.env.EMAILJS_PUBLIC_KEY;
+  const privateKey = process.env.EMAILJS_PRIVATE_KEY;
+
+  if (!serviceId) throw new Error("Missing EMAILJS_SERVICE_ID");
+  if (!templateId) throw new Error("Missing EMAILJS_TEMPLATE_ID");
+  if (!publicKey) throw new Error("Missing EMAILJS_PUBLIC_KEY");
+  if (!privateKey) throw new Error("Missing EMAILJS_PRIVATE_KEY");
+
+  return { serviceId, templateId, publicKey, privateKey };
+}
+
+function normalizeEmail(email: string): string {
+  return email.trim().toLowerCase();
+}
+
+function buildTemplateParams(params: {
+  to: string;
   name: string;
+  phone: string;
+  company: string | null;
   requirement: string;
   leadId: string;
 }) {
-  const { openPixelUrl, clickUrl } = buildTrackingUrls(params.leadId);
+  const baseUrl = getBaseUrl();
+  const redirect = encodeURIComponent(getCtaRedirectUrl());
+  const recipient = normalizeEmail(params.to);
 
-  return `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-</head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f4f4f5;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f5;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 6px rgba(0,0,0,0.07);">
-          <tr>
-            <td style="background:linear-gradient(135deg,#2563eb,#7c3aed);padding:32px 40px;">
-              <h1 style="margin:0;color:#ffffff;font-size:24px;font-weight:600;">Thank You, ${params.name}!</h1>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:40px;">
-              <p style="margin:0 0 16px;color:#374151;font-size:16px;line-height:1.6;">
-                We've received your inquiry and our team is reviewing it. Here's a summary of what you shared:
-              </p>
-              <div style="background:#f9fafb;border-left:4px solid #2563eb;padding:16px 20px;border-radius:0 8px 8px 0;margin:24px 0;">
-                <p style="margin:0;color:#4b5563;font-size:15px;line-height:1.6;font-style:italic;">
-                  "${params.requirement}"
-                </p>
-              </div>
-              <p style="margin:0 0 24px;color:#374151;font-size:16px;line-height:1.6;">
-                A member of our team will reach out to you shortly. In the meantime, explore what we can do for you.
-              </p>
-              <a href="${clickUrl}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:14px 28px;border-radius:8px;font-size:16px;font-weight:600;">
-                Learn More About Our Services
-              </a>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:24px 40px;background:#f9fafb;border-top:1px solid #e5e7eb;">
-              <p style="margin:0;color:#9ca3af;font-size:13px;text-align:center;">
-                This email was sent in response to your inquiry. If you didn't submit a request, please ignore this message.
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-  <img src="${openPixelUrl}" width="1" height="1" alt="" style="display:block;width:1px;height:1px;border:0;" />
-</body>
-</html>
-  `.trim();
+  // EmailJS resolves the recipient from the template "To Email" field.
+  // Send every common alias so it works regardless of which variable the template uses.
+  const templateParams: Record<string, string> = {
+    to_name: params.name,
+    to_email: recipient,
+    user_email: recipient,
+    email: recipient,
+    reply_to: recipient,
+    from_name: params.name,
+    user_name: params.name,
+    name: params.name,
+    message: params.requirement,
+    requirement: params.requirement,
+    company: params.company || "N/A",
+    phone: params.phone,
+    trackable_link: `${baseUrl}/api/track/click?lead_id=${params.leadId}&redirect=${redirect}`,
+    tracking_pixel: `${baseUrl}/api/track/open?lead_id=${params.leadId}`,
+  };
+
+  const customRecipientField = process.env.EMAILJS_RECIPIENT_FIELD?.trim();
+  if (customRecipientField) {
+    templateParams[customRecipientField] = recipient;
+  }
+
+  return { recipient, templateParams };
+}
+
+function parseEmailJsError(error: unknown, recipient: string): Error {
+  const err = error as { status?: number; text?: string };
+
+  if (err?.status === 403) {
+    return new Error(
+      "EmailJS server access is disabled. Enable 'Allow EmailJS API for non-browser applications' " +
+        "at https://dashboard.emailjs.com/admin/account/security"
+    );
+  }
+
+  if (err?.status === 422) {
+    return new Error(
+      `EmailJS could not send to "${recipient}". Open your template at ` +
+        `https://dashboard.emailjs.com/admin/templates and set the **To Email** field to ` +
+        `{{to_email}} or {{user_email}} (must match a variable name in the code). ` +
+        `Details: ${err.text || "recipient address invalid"}`
+    );
+  }
+
+  if (err?.text) {
+    return new Error(`Confirmation email could not be sent: ${err.text}`);
+  }
+
+  if (error instanceof Error) {
+    return error;
+  }
+
+  return new Error("Confirmation email could not be sent.");
 }
 
 export async function sendLeadEmail(params: {
   to: string;
   name: string;
+  phone: string;
+  company: string | null;
   requirement: string;
   leadId: string;
 }): Promise<SendLeadEmailResult> {
-  const from = getFromAddress();
-  const sandboxWarning = getSandboxSenderWarning();
+  const { serviceId, templateId, publicKey, privateKey } = getEmailJsConfig();
+  const { recipient, templateParams } = buildTemplateParams(params);
 
-  if (sandboxWarning) {
-    console.warn("[Resend]", sandboxWarning);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) {
+    throw new Error(`Invalid recipient email: "${recipient}"`);
   }
 
-  const resend = getResend();
-  const html = buildLeadEmailHtml(params);
-
-  const { data, error } = await resend.emails.send({
-    from,
-    to: [params.to.trim().toLowerCase()],
-    subject: `Thanks for reaching out, ${params.name}!`,
-    html,
-  });
-
-  if (error) {
-    console.error("[Resend] Send failed:", {
-      to: params.to,
-      from,
-      error,
+  try {
+    const response = await emailjs.send(serviceId, templateId, templateParams, {
+      publicKey,
+      privateKey,
     });
-    throw new Error(formatResendErrorMessage(error.message));
-  }
 
-  if (!data?.id) {
-    throw new Error("Confirmation email could not be sent: no message id returned.");
-  }
+    if (response.status !== 200) {
+      throw { status: response.status, text: response.text };
+    }
 
-  return { id: data.id };
+    return response;
+  } catch (error) {
+    console.error("[EmailJS] Send failed:", { recipient, error });
+    throw parseEmailJsError(error, recipient);
+  }
 }

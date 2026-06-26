@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import FloatingInput from "@/components/ui/FloatingInput";
 import SuccessState from "@/components/home/SuccessState";
 import { useToast } from "@/components/ui/ToastProvider";
@@ -49,11 +49,23 @@ const icons = {
   ),
 };
 
+function validateForm(form: FormState): string | null {
+  if (!form.name.trim()) return "Full name is required";
+  if (!form.email.trim()) return "Email address is required";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email))
+    return "Please enter a valid email address";
+  if (!form.phone.trim()) return "Phone number is required";
+  if (!form.requirement.trim()) return "Requirement / message is required";
+  return null;
+}
+
 export default function LeadForm() {
   const { toast } = useToast();
+  const [ready, setReady] = useState(false);
   const [form, setForm] = useState<FormState>(initialForm);
   const [loading, setLoading] = useState(false);
   const [shake, setShake] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [success, setSuccess] = useState<{
     ai_category: string | null;
     ai_priority: string | null;
@@ -61,10 +73,13 @@ export default function LeadForm() {
     emailWarning?: string;
   } | null>(null);
 
-  function handleChange(
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
-  ) {
-    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  useEffect(() => {
+    setReady(true);
+  }, []);
+
+  function updateField(field: keyof FormState, value: string) {
+    setFormError(null);
+    setForm((prev) => ({ ...prev, [field]: value }));
   }
 
   function triggerShake() {
@@ -72,9 +87,19 @@ export default function LeadForm() {
     setTimeout(() => setShake(false), 500);
   }
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function submitForm() {
+    if (loading) return;
+
+    const validationError = validateForm(form);
+    if (validationError) {
+      setFormError(validationError);
+      triggerShake();
+      toast(validationError, "error");
+      return;
+    }
+
     setLoading(true);
+    setFormError(null);
 
     try {
       const res = await fetch("/api/submit-lead", {
@@ -83,11 +108,24 @@ export default function LeadForm() {
         body: JSON.stringify(form),
       });
 
-      const data = await res.json();
+      let data: {
+        error?: string;
+        emailSent?: boolean;
+        emailWarning?: string;
+        lead?: { ai_category?: string | null; ai_priority?: string | null };
+      };
+
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error("Invalid response from server");
+      }
 
       if (!res.ok) {
+        const message = data.error || "Something went wrong";
+        setFormError(message);
         triggerShake();
-        toast(data.error || "Something went wrong", "error");
+        toast(message, "error");
         return;
       }
 
@@ -98,14 +136,17 @@ export default function LeadForm() {
         emailWarning: data.emailWarning,
       });
       setForm(initialForm);
+
       if (data.emailSent) {
         toast("Inquiry submitted! Confirmation email sent.", "success");
       } else {
-        toast("Inquiry saved, but confirmation email could not be sent.", "error");
+        toast("Inquiry saved! (Email could not be sent)", "info");
       }
     } catch {
+      const message = "Submission failed. Please try again.";
+      setFormError(message);
       triggerShake();
-      toast("Submission failed. Please try again.", "error");
+      toast(message, "error");
     } finally {
       setLoading(false);
     }
@@ -123,27 +164,47 @@ export default function LeadForm() {
     );
   }
 
+  if (!ready) {
+    return (
+      <div className="space-y-5">
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div className="skeleton h-14 rounded-xl" />
+          <div className="skeleton h-14 rounded-xl" />
+        </div>
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div className="skeleton h-14 rounded-xl" />
+          <div className="skeleton h-14 rounded-xl" />
+        </div>
+        <div className="skeleton h-28 rounded-xl" />
+        <div className="skeleton h-14 rounded-xl" />
+      </div>
+    );
+  }
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-5">
+    <div className="space-y-5">
+      {formError && (
+        <div className="rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+          {formError}
+        </div>
+      )}
+
       <div className={`grid gap-5 sm:grid-cols-2 ${shake ? "animate-shake" : ""}`}>
         <FloatingInput
-          id="name"
-          name="name"
+          id="lead-name"
           label="Full Name"
-          required
           value={form.name}
-          onChange={handleChange}
+          onChange={(e) => updateField("name", e.target.value)}
           icon={icons.user}
           shake={shake}
         />
         <FloatingInput
-          id="email"
-          name="email"
+          id="lead-email"
           label="Email Address"
-          type="email"
-          required
+          inputMode="email"
+          autoComplete="email"
           value={form.email}
-          onChange={handleChange}
+          onChange={(e) => updateField("email", e.target.value)}
           icon={icons.mail}
           shake={shake}
         />
@@ -151,39 +212,37 @@ export default function LeadForm() {
 
       <div className="grid gap-5 sm:grid-cols-2">
         <FloatingInput
-          id="phone"
-          name="phone"
+          id="lead-phone"
           label="Phone Number"
-          type="tel"
-          required
+          inputMode="tel"
+          autoComplete="tel"
           value={form.phone}
-          onChange={handleChange}
+          onChange={(e) => updateField("phone", e.target.value)}
           icon={icons.phone}
         />
         <FloatingInput
-          id="company"
-          name="company"
+          id="lead-company"
           label="Company Name"
+          autoComplete="organization"
           value={form.company}
-          onChange={handleChange}
+          onChange={(e) => updateField("company", e.target.value)}
           icon={icons.building}
         />
       </div>
 
       <FloatingInput
-        id="requirement"
-        name="requirement"
+        id="lead-requirement"
         label="Requirement / Message"
-        required
         value={form.requirement}
-        onChange={handleChange}
+        onChange={(e) => updateField("requirement", e.target.value)}
         icon={icons.message}
         multiline
         rows={4}
       />
 
       <button
-        type="submit"
+        type="button"
+        onClick={() => void submitForm()}
         disabled={loading}
         className="btn-shimmer btn-interactive relative flex w-full items-center justify-center gap-2 rounded-xl px-6 py-4 text-base font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
       >
@@ -193,12 +252,12 @@ export default function LeadForm() {
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
             </svg>
-            Submitting...
+            Submitting…
           </>
         ) : (
           "Submit Inquiry"
         )}
       </button>
-    </form>
+    </div>
   );
 }

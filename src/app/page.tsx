@@ -39,7 +39,10 @@ export default function Home() {
           </p>
         </div>
 
-        <div className="animate-fade-in-up glass-card w-full p-8 shadow-2xl sm:p-10" style={{ animationDelay: "0.15s" }}>
+        <div
+          className="animate-fade-in-up glass-card w-full p-8 shadow-2xl sm:p-10"
+          style={{ animationDelay: "0.15s" }}
+        >
           <LeadForm />
         </div>
       </div>

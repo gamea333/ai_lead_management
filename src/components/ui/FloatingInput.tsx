@@ -4,10 +4,10 @@ import { useState, type ReactNode } from "react";
 
 interface FloatingInputProps {
   id: string;
-  name: string;
   label: string;
   type?: string;
-  required?: boolean;
+  inputMode?: "text" | "email" | "tel" | "numeric" | "decimal" | "search" | "url";
+  autoComplete?: string;
   value: string;
   onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => void;
   icon: ReactNode;
@@ -18,10 +18,10 @@ interface FloatingInputProps {
 
 export default function FloatingInput({
   id,
-  name,
   label,
   type = "text",
-  required,
+  inputMode,
+  autoComplete,
   value,
   onChange,
   icon,
@@ -42,15 +42,17 @@ export default function FloatingInput({
 
   return (
     <div className="relative">
-      <div className="pointer-events-none absolute left-4 top-1/2 z-10 -translate-y-1/2 text-zinc-500 transition-colors duration-300 peer-focus:text-violet-400">
+      <div
+        className={`pointer-events-none absolute left-4 z-10 text-zinc-500 transition-colors duration-300 peer-focus:text-violet-400 ${
+          multiline ? "top-6" : "top-1/2 -translate-y-1/2"
+        }`}
+      >
         {icon}
       </div>
 
       {multiline ? (
         <textarea
           id={id}
-          name={name}
-          required={required}
           value={value}
           onChange={onChange}
           rows={rows}
@@ -61,9 +63,9 @@ export default function FloatingInput({
       ) : (
         <input
           id={id}
-          name={name}
           type={type}
-          required={required}
+          inputMode={inputMode}
+          autoComplete={autoComplete}
           value={value}
           onChange={onChange}
           onFocus={() => setFocused(true)}
@@ -85,7 +87,6 @@ export default function FloatingInput({
         }`}
       >
         {label}
-        {required && <span className="text-red-400"> *</span>}
       </label>
     </div>
   );

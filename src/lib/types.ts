@@ -28,6 +28,7 @@ export interface LeadFormData {
 export interface LeadWithEngagement extends Lead {
   email_opened: boolean;
   link_clicked: boolean;
+  created_at_display: string;
 }
 
 export interface DashboardStats {

@@ -63,6 +63,8 @@ export async function POST(request: Request) {
       await sendLeadEmail({
         to: lead.email,
         name: lead.name,
+        phone: lead.phone,
+        company: lead.company,
         requirement: lead.requirement,
         leadId: lead.id,
       });

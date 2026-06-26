@@ -90,7 +90,7 @@ export default function LeadsTable({ leads }: { leads: LeadWithEngagement[] }) {
                   <PriorityBadge priority={lead.ai_priority} />
                 </td>
                 <td className="whitespace-nowrap px-4 py-3.5 text-zinc-500">
-                  {new Date(lead.created_at).toLocaleString()}
+                  {lead.created_at_display}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3.5">
                   <EngagementBadge active={lead.email_opened} />
