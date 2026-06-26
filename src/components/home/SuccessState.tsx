@@ -6,15 +6,21 @@ import confetti from "canvas-confetti";
 interface SuccessStateProps {
   aiCategory: string | null;
   aiPriority: string | null;
+  emailSent: boolean;
+  emailWarning?: string;
   onReset: () => void;
 }
 
 export default function SuccessState({
   aiCategory,
   aiPriority,
+  emailSent,
+  emailWarning,
   onReset,
 }: SuccessStateProps) {
   useEffect(() => {
+    if (!emailSent) return;
+
     const duration = 2000;
     const end = Date.now() + duration;
 
@@ -36,7 +42,7 @@ export default function SuccessState({
       if (Date.now() < end) requestAnimationFrame(frame);
     };
     frame();
-  }, []);
+  }, [emailSent]);
 
   return (
     <div className="animate-fade-in py-8 text-center">
@@ -50,8 +56,19 @@ export default function SuccessState({
         You&apos;re all set!
       </h2>
       <p className="animate-fade-in-up mt-2 text-zinc-400" style={{ animationDelay: "0.3s" }}>
-        We&apos;ve received your inquiry and sent a confirmation email.
+        {emailSent
+          ? "We've received your inquiry and sent a confirmation email."
+          : "We've received your inquiry, but the confirmation email could not be delivered."}
       </p>
+
+      {!emailSent && emailWarning && (
+        <p
+          className="animate-fade-in-up mx-auto mt-4 max-w-md rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-left text-xs leading-relaxed text-amber-200"
+          style={{ animationDelay: "0.35s" }}
+        >
+          {emailWarning}
+        </p>
+      )}
 
       {(aiCategory || aiPriority) && (
         <div className="animate-fade-in-up mt-6 flex flex-wrap items-center justify-center gap-3" style={{ animationDelay: "0.4s" }}>

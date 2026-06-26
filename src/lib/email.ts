@@ -1,9 +1,47 @@
 import { Resend } from "resend";
 
+export type SendLeadEmailResult = {
+  id: string;
+};
+
 function getResend() {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) throw new Error("Missing RESEND_API_KEY");
   return new Resend(apiKey);
+}
+
+function getFromAddress() {
+  return process.env.RESEND_FROM_EMAIL || "LeadFlow <onboarding@resend.dev>";
+}
+
+/** Resend's test domain only delivers to the account owner's email. */
+export function isSandboxSender(from = getFromAddress()) {
+  return /@resend\.dev/i.test(from);
+}
+
+export function getSandboxSenderWarning() {
+  if (!isSandboxSender()) return null;
+  return (
+    "RESEND_FROM_EMAIL uses onboarding@resend.dev (test mode). " +
+    "Resend only delivers to the email on your Resend account. " +
+    "To email all leads, verify a domain at resend.com/domains and set " +
+    "RESEND_FROM_EMAIL to e.g. LeadFlow <noreply@yourdomain.com>."
+  );
+}
+
+export function formatResendErrorMessage(message: string) {
+  if (
+    message.includes("only send testing emails") ||
+    message.includes("verify a domain")
+  ) {
+    return (
+      "Confirmation email could not be sent to this address. " +
+      "Your Resend account is in test mode (onboarding@resend.dev) and can only " +
+      "email the address registered on your Resend account. Verify a custom domain " +
+      "at resend.com/domains and update RESEND_FROM_EMAIL in your .env file."
+    );
+  }
+  return `Confirmation email could not be sent: ${message}`;
 }
 
 function getBaseUrl() {
@@ -84,20 +122,36 @@ export async function sendLeadEmail(params: {
   name: string;
   requirement: string;
   leadId: string;
-}) {
-  const from =
-    process.env.RESEND_FROM_EMAIL || "LeadFlow <onboarding@resend.dev>";
+}): Promise<SendLeadEmailResult> {
+  const from = getFromAddress();
+  const sandboxWarning = getSandboxSenderWarning();
+
+  if (sandboxWarning) {
+    console.warn("[Resend]", sandboxWarning);
+  }
 
   const resend = getResend();
   const html = buildLeadEmailHtml(params);
 
   const { data, error } = await resend.emails.send({
     from,
-    to: params.to,
+    to: [params.to.trim().toLowerCase()],
     subject: `Thanks for reaching out, ${params.name}!`,
     html,
   });
 
-  if (error) throw new Error(error.message);
-  return data;
+  if (error) {
+    console.error("[Resend] Send failed:", {
+      to: params.to,
+      from,
+      error,
+    });
+    throw new Error(formatResendErrorMessage(error.message));
+  }
+
+  if (!data?.id) {
+    throw new Error("Confirmation email could not be sent: no message id returned.");
+  }
+
+  return { id: data.id };
 }

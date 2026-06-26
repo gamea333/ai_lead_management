@@ -57,6 +57,8 @@ export default function LeadForm() {
   const [success, setSuccess] = useState<{
     ai_category: string | null;
     ai_priority: string | null;
+    emailSent: boolean;
+    emailWarning?: string;
   } | null>(null);
 
   function handleChange(
@@ -92,9 +94,15 @@ export default function LeadForm() {
       setSuccess({
         ai_category: data.lead?.ai_category ?? null,
         ai_priority: data.lead?.ai_priority ?? null,
+        emailSent: data.emailSent ?? false,
+        emailWarning: data.emailWarning,
       });
       setForm(initialForm);
-      toast("Inquiry submitted successfully!", "success");
+      if (data.emailSent) {
+        toast("Inquiry submitted! Confirmation email sent.", "success");
+      } else {
+        toast("Inquiry saved, but confirmation email could not be sent.", "error");
+      }
     } catch {
       triggerShake();
       toast("Submission failed. Please try again.", "error");
@@ -108,6 +116,8 @@ export default function LeadForm() {
       <SuccessState
         aiCategory={success.ai_category}
         aiPriority={success.ai_priority}
+        emailSent={success.emailSent}
+        emailWarning={success.emailWarning}
         onReset={() => setSuccess(null)}
       />
     );

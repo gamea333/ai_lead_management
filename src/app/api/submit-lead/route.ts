@@ -56,6 +56,9 @@ export async function POST(request: Request) {
         .eq("id", lead.id);
     }
 
+    let emailSent = false;
+    let emailWarning: string | undefined;
+
     try {
       await sendLeadEmail({
         to: lead.email,
@@ -68,12 +71,19 @@ export async function POST(request: Request) {
         lead_id: lead.id,
         event_type: "sent",
       });
+      emailSent = true;
     } catch (emailError) {
+      emailWarning =
+        emailError instanceof Error
+          ? emailError.message
+          : "Confirmation email could not be sent.";
       console.error("Email send error:", emailError);
     }
 
     return NextResponse.json({
       success: true,
+      emailSent,
+      emailWarning,
       lead: {
         id: lead.id,
         ai_category: classification?.category ?? null,
